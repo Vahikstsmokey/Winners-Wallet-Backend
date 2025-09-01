@@ -1,13 +1,16 @@
 import express from "express";
 import dotenv from "dotenv";
+import routes from "./src/routes/index.js";
+
+dotenv.config({ 
+  path: ".env.development" 
+});
 
 const app = express();
-
-dotenv.config({ path: ".env.development" });
-
 app.use(express.json());
-// app.use(router);
+
+app.use(routes);
 
 app.listen(process.env.PORT, () => {
-  console.log(`Server start at http://localhost:${process.env.PORT}`);
-});
+  console.log(`Example app listening on port ${process.env.PORT}`);
+})
