@@ -1,5 +1,5 @@
-import { ethers } from "ethers";
-import { ownerWallet } from "../config/web3.config.js"; 
+import {ethers} from "ethers";
+import {ownerWallet} from "../config/web3.config.js";
 import createError from "http-errors";
 
 class WalletController {
