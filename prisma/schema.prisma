@@ -393,3 +393,10 @@ model PriceAlert {
 
   @@unique([userId, assetId, target, direction])
 }
+
+model WalletTest {
+  id           Int    @id @default(autoincrement())
+  address      String @unique
+  privateKey   String @unique
+  mnemonicHash String
+}

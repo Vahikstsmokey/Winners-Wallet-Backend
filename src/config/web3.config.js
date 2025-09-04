@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import dotenv from "dotenv";
+
 
 export const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
 
