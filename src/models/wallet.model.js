@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-// Приватный ключ Ethereum (64 hex символа после 0x)
 export const PrivateKeySchema = z
   .string()
   .trim()
@@ -10,7 +9,6 @@ export const PrivateKeySchema = z
     "privateKey должен быть валидным hex (0x + 64 символа)"
   );
 
-// Адрес Ethereum (40 hex символов после 0x)
 export const AddressSchema = z
   .string()
   .trim()
@@ -19,22 +17,19 @@ export const AddressSchema = z
     "address должен быть валидным Ethereum адресом"
   );
 
-// Мнемоника (ровно 12 слов)
 export const MnemonicSchema = z
   .string()
   .trim()
-  .nonempty()
+  .min(1, "Mnemonic не может быть пустым")
   .refine((val) => val.split(" ").length === 12, {
-    message: "Mnemonic must contain exactly 12 words",
+    message: "Mnemonic должен содержать ровно 12 слов",
   });
 
-// Для создания кошелька (privateKey + address)
 export const WalletSchema = z.object({
   privateKey: PrivateKeySchema,
   address: AddressSchema,
 });
 
-// Для импорта кошелька (privateKey + мнемоника)
 export const WalletHshSchema = z.object({
   privateKey: PrivateKeySchema,
   mnemonic: MnemonicSchema,

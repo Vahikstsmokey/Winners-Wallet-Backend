@@ -1,24 +1,15 @@
 import { prisma } from "../utils/prisma.js";
 import { ethers } from "ethers";
 import bcrypt from "bcrypt";
-import { WalletHshSchema } from "../models/wallet.model.js";
+import createError from "http-errors";
 
 class WalletController {
-  // Создание нового кошелька
   static async createWallet(req, res, next) {
     try {
       const wallet = ethers.Wallet.createRandom();
 
-      // Валидация privateKey + mnemonic
-      WalletHshSchema.parse({
-        privateKey: wallet.privateKey,
-        mnemonic: wallet.mnemonic.phrase,
-      });
+      const mnemonicHash = await bcrypt.hash(wallet.mnemonic.phrase, 12);
 
-      // Хешируем мнемонику
-      const mnemonicHash = await bcrypt.hash(wallet.mnemonic.phrase, 10);
-
-      // Сохраняем кошелек с хешем мнемоники
       await prisma.walletTest.create({
         data: {
           address: wallet.address,
@@ -27,58 +18,106 @@ class WalletController {
         },
       });
 
-      // Отправляем пользователю 12 слов
       res.status(201).json({
+        status: "success",
         message: "Кошелёк успешно создан",
-        wallet: {
+        data: {
           address: wallet.address,
           privateKey: wallet.privateKey,
-          mnemonic: wallet.mnemonic.phrase, // только для пользователя
+          mnemonic: wallet.mnemonic.phrase,
         },
       });
     } catch (err) {
-      next(err);
+      console.error("Ошибка создания кошелька:", err);
+
+      if (err.code === "P2002") {
+        return next(
+          createError(409, "Кошелек с такими данными уже существует")
+        );
+      }
+
+      next(createError(500, "Не удалось создать кошелек"));
     }
   }
 
-  // Импорт кошелька по privateKey + проверка мнемоники
   static async importWallet(req, res, next) {
     try {
-      WalletHshSchema.parse(req.body);
+      // ИСПРАВЛЕНО: убрал address из деструктуризации
+      const { privateKey, mnemonic } = req.body;
 
-      const { privateKey, address, mnemonic } = req.body;
-
-      const wallet = await prisma.walletTest.findUnique({
+      // Ищем кошелек по приватному ключу
+      const existingWallet = await prisma.walletTest.findUnique({
         where: { privateKey },
       });
 
-      if (!wallet) {
-        return res.status(404).json({
-          status: "error",
-          message: "Кошелёк с таким privateKey не найден",
-        });
+      if (!existingWallet) {
+        return next(createError(404, "Кошелёк с таким privateKey не найден"));
       }
 
-      // Проверяем хеш мнемоники
-      const mnemonicMatch = await bcrypt.compare(mnemonic, wallet.mnemonicHash);
+      // Проверяем мнемонику (сравниваем с хешированной версией в БД)
+      const mnemonicMatch = await bcrypt.compare(
+        mnemonic,
+        existingWallet.mnemonicHash
+      );
 
-      if (wallet.address === address && mnemonicMatch) {
-        return res.status(200).json({
-          status: "success",
-          message: "Кошелёк успешно импортирован",
-        });
-      } else {
-        return res.status(400).json({
-          status: "error",
-          message: "Данные кошелька не совпадают",
-          details: {
-            addressMatch: wallet.address === address,
-            mnemonicMatch,
-          },
-        });
+      // ИСПРАВЛЕНО: проверяем только mnemonic, без address
+      if (!mnemonicMatch) {
+        return next(createError(400, "Mnemonic не совпадает"));
       }
+
+      res.status(200).json({
+        status: "success",
+        message: "Кошелёк успешно импортирован",
+        data: {
+          address: existingWallet.address,
+        },
+      });
     } catch (err) {
-      next(err);
+      console.error("Ошибка импорта кошелька:", err);
+      next(createError(500, "Не удалось импортировать кошелек"));
+    }
+  }
+
+  static async getWallet(req, res, next) {
+    try {
+      const { address } = req.params;
+
+      const wallet = await prisma.walletTest.findUnique({
+        where: { address },
+        select: {
+          address: true,
+        },
+      });
+
+      if (!wallet) {
+        return next(createError(404, "Кошелёк не найден"));
+      }
+
+      res.status(200).json({
+        status: "success",
+        data: wallet,
+      });
+    } catch (err) {
+      console.error("Ошибка получения кошелька:", err);
+      next(createError(500, "Не удалось получить информацию о кошельке"));
+    }
+  }
+
+  static async getAllWallets(req, res, next) {
+    try {
+      const wallets = await prisma.walletTest.findMany({
+        select: {
+          address: true,
+        },
+      });
+
+      res.status(200).json({
+        status: "success",
+        data: wallets,
+      });
+    } catch (err) {
+      console.error("Ошибка получения списка кошельков:", err);
+      next(createError(500, "Не удалось получить список кошельков"));
     }
   }
 }
