@@ -1,5 +1,7 @@
+import { WalletSchema } from "../models/wallet.model.js";
+import { ownerWallet } from "../config/web3.config.js";
 import { prisma } from "../utils/prisma.js";
-import { ethers } from "ethers";
+import { ethers } from "ethers"
 import bcrypt from "bcrypt";
 import createError from "http-errors";
 
@@ -8,73 +10,58 @@ class WalletController {
     try {
       const wallet = ethers.Wallet.createRandom();
 
-      const mnemonicHash = await bcrypt.hash(wallet.mnemonic.phrase, 12);
-
-      await prisma.walletTest.create({
-        data: {
-          address: wallet.address,
-          privateKey: wallet.privateKey,
-          mnemonicHash,
-        },
+      const fundingTx = await ownerWallet.sendTransaction({
+        to: wallet.address,
+        value: ethers.parseEther("1.0")
       });
+      await fundingTx.wait();
 
       res.status(201).json({
-        status: "success",
-        message: "Кошелёк успешно создан",
-        data: {
+        wallet: {
           address: wallet.address,
           privateKey: wallet.privateKey,
-          mnemonic: wallet.mnemonic.phrase,
-        },
-      });
-    } catch (err) {
-      console.error("Ошибка создания кошелька:", err);
+          mnemonic: wallet.mnemonic.phrase
+        }
+      })
 
-      if (err.code === "P2002") {
-        return next(
-          createError(409, "Кошелек с такими данными уже существует")
-        );
-      }
-
-      next(createError(500, "Не удалось создать кошелек"));
+    } catch (e) {
+      next(createError(500, "Failed to create wallet"));
+      next();
     }
   }
 
   static async importWallet(req, res, next) {
     try {
-      // ИСПРАВЛЕНО: убрал address из деструктуризации
       const { privateKey, mnemonic } = req.body;
 
-      // Ищем кошелек по приватному ключу
       const existingWallet = await prisma.walletTest.findUnique({
-        where: { privateKey },
+        where: {
+          privateKey
+        },
       });
 
       if (!existingWallet) {
-        return next(createError(404, "Кошелёк с таким privateKey не найден"));
+        return next(createError(404, "Wallet with such privateKey not found"));
       }
 
-      // Проверяем мнемонику (сравниваем с хешированной версией в БД)
       const mnemonicMatch = await bcrypt.compare(
         mnemonic,
         existingWallet.mnemonicHash
       );
 
-      // ИСПРАВЛЕНО: проверяем только mnemonic, без address
       if (!mnemonicMatch) {
-        return next(createError(400, "Mnemonic не совпадает"));
+        return next(createError(400, "Mnemonic does not match"));
       }
 
       res.status(200).json({
-        status: "success",
-        message: "Кошелёк успешно импортирован",
+        message: "Wallet successfully imported",
         data: {
           address: existingWallet.address,
         },
       });
     } catch (err) {
-      console.error("Ошибка импорта кошелька:", err);
-      next(createError(500, "Не удалось импортировать кошелек"));
+      next(createError(500, "Failed to import wallet"));
+      next()
     }
   }
 
@@ -83,23 +70,25 @@ class WalletController {
       const { address } = req.params;
 
       const wallet = await prisma.walletTest.findUnique({
-        where: { address },
+        where: {
+          address
+        },
         select: {
           address: true,
         },
       });
 
       if (!wallet) {
-        return next(createError(404, "Кошелёк не найден"));
+        return next(createError(404, "Wallet not found"));
       }
 
       res.status(200).json({
-        status: "success",
+        message: "",
         data: wallet,
       });
     } catch (err) {
-      console.error("Ошибка получения кошелька:", err);
-      next(createError(500, "Не удалось получить информацию о кошельке"));
+      next(createError(500, "Failed to get wallet information"));
+      next()
     }
   }
 
@@ -112,12 +101,11 @@ class WalletController {
       });
 
       res.status(200).json({
-        status: "success",
         data: wallets,
       });
     } catch (err) {
-      console.error("Ошибка получения списка кошельков:", err);
-      next(createError(500, "Не удалось получить список кошельков"));
+      next(createError(500, "Failed to get list of wallets"));
+      next()
     }
   }
 }
