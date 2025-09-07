@@ -14,15 +14,10 @@ datasource db {
 }
 
 enum Chain {
-  BTC
   ETH
+  BTC
   POLYGON
-  SOL
-}
-
-enum MarketType {
-  SPOT
-  PERP
+  SOLANA
 }
 
 enum TxStatus {
@@ -31,365 +26,107 @@ enum TxStatus {
   FAILED
 }
 
-model Asset {
-  id             String           @id // e.g., "BTC", "ETH", "USDT"
-  symbol         String           @unique
-  name           String
-  baseId         Int
-  quoteId        Int
-  chain          Chain?
-  tokens         Token[] // chain-specific token contracts
-  baseMarkets    Market[]         @relation("BaseAsset")
-  quoteMarkets   Market[]         @relation("QuoteAsset")
-  markets        Market[]
-  addresses      Address[]
-  deposits       Deposit[]
-  prices         FiatRate[]
-  Withdrawal     Withdrawal[]
-  PriceAlert     PriceAlert[]
-  transactions   Transaction[]
-  portfolioItems PortfolioItem[]
-  watchlistEntry WatchlistEntry[]
-  createdAt      DateTime         @default(now())
-}
-
-model Token {
-  id       Int    @id @default(autoincrement()) // contract address (for account-based chains)
-  symbol   String
-  assetId  String
-  decimals Int
-  chain    Chain
-  asset    Asset  @relation(fields: [assetId], references: [id])
-
-  @@unique([chain, id])
-  @@index([assetId])
-}
-
-model Exchange {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  markets   Market[]
-  createdAt DateTime @default(now())
-}
-
-model Market {
-  id          Int                 @id @default(autoincrement())
-  baseId      String
-  quoteId     String
-  exchangeId  Int
-  base        Asset               @relation("BaseAsset", fields: [baseId], references: [id])
-  quote       Asset               @relation("QuoteAsset", fields: [quoteId], references: [id])
-  trades      Trade[]
-  assets      Asset[]
-  orders      Order[]
-  exchange    Exchange            @relation(fields: [exchangeId], references: [id])
-  pricePoints PriceOHLC[]
-  type        MarketType          @default(SPOT)
-  orderBooks  OrderBookSnapshot[]
-
-  @@unique([exchangeId, baseId, quoteId, type])
-  @@index([baseId])
-  @@index([quoteId])
-}
-
-model PriceOHLC {
-  id        BigInt   @id @default(autoincrement())
-  market    Market   @relation(fields: [marketId], references: [id])
-  marketId  Int
-  open      Decimal
-  high      Decimal
-  low       Decimal
-  close     Decimal
-  volume    Decimal
-  timestamp DateTime
-
-  @@unique([marketId, timestamp])
-  @@index([marketId, timestamp])
-}
-
-model Trade {
-  id        BigInt      @id @default(autoincrement())
-  marketId  Int
-  price     Decimal
-  amount    Decimal
-  side      String // "buy" | "sell"
-  tradedAt  DateTime    @default(now())
-  market    Market      @relation(fields: [marketId], references: [id])
-  OrderFill OrderFill[]
-
-  @@index([marketId, tradedAt])
-}
-
 model User {
-  id           Int            @id @default(autoincrement())
-  email        String         @unique
-  name         String?
-  orders       Order[]
-  wallets      Wallet[]
-  ApiKey       ApiKey[]
-  deposits     Deposit[]
-  watchlists   Watchlist[]
-  portfolios   Portfolio[]
-  priceAlerts  PriceAlert[]
-  Withdrawal   Withdrawal[]
-  Notification Notification[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-}
-
-model WalletProvider {
-  id      String   @id // e.g., "fireblocks", "custodian-x" or "local"
-  name    String
-  wallets Wallet[]
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String
+  wallets   Wallet[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Wallet {
-  id              String          @id // app-level wallet id
-  label           String?
-  ownerId         Int
-  providerId      String?
-  addresses       Address[]
-  Deposit         Deposit[]
-  Withdrawal      Withdrawal[]
-  transactionsIn  Transaction[]   @relation("TxTo")
-  transactionsOut Transaction[]   @relation("TxFrom")
-  owner           User            @relation(fields: [ownerId], references: [id])
-  provider        WalletProvider? @relation(fields: [providerId], references: [id])
-  createdAt       DateTime        @default(now())
+  id          String        @id @default(cuid())
+  label       String?
+  ownerId     Int
+  providerId  String?
+  addresses   Address[]
+  deposits    Deposit[]
+  withdrawals Withdrawal[]
+  txIn        Transaction[] @relation("TxTo")
+  txOut       Transaction[] @relation("TxFrom")
 
-  @@index([ownerId])
-  @@index([providerId])
+  owner    User            @relation(fields: [ownerId], references: [id])
+  provider WalletProvider? @relation(fields: [providerId], references: [id])
+  Balance  Balance[]
 }
 
 model Address {
-  id       String  @id // chain-specific address or xpub
-  label    String?
-  walletId String?
-  assetId  String?
+  id       Int    @id @default(autoincrement())
   chain    Chain
-  asset    Asset?  @relation(fields: [assetId], references: [id])
-  wallet   Wallet? @relation(fields: [walletId], references: [id])
-
-  @@unique([chain, id])
-  @@index([walletId])
-  @@index([assetId])
+  address  String @unique
+  walletId String
+  wallet   Wallet @relation(fields: [walletId], references: [id])
 }
 
-model Transaction {
-  id           String   @id // tx hash or internal id
-  assetId      String?
-  fromWalletId String?
-  toWalletId   String?
-  fromAddress  String?
-  toAddress    String?
-  amount       Decimal
-  fee          Decimal?
-  timestamp    DateTime @default(now())
-  chain        Chain
-  asset        Asset?   @relation(fields: [assetId], references: [id])
-  status       TxStatus @default(PENDING)
-  to           Wallet?  @relation("TxTo", fields: [toWalletId], references: [id])
-  from         Wallet?  @relation("TxFrom", fields: [fromWalletId], references: [id])
-
-  @@index([fromWalletId])
-  @@index([toWalletId])
-  @@index([assetId])
-}
-
-enum NetworkType {
-  MAINNET
-  TESTNET
-}
-
-model Network {
-  id        Int         @id @default(autoincrement())
-  name      String      @unique
-  chain     Chain
-  explorers Explorer[]
-  type      NetworkType @default(MAINNET)
-}
-
-model Explorer {
-  id        Int     @id @default(autoincrement())
-  name      String
-  url       String
-  networkId Int
-  network   Network @relation(fields: [networkId], references: [id])
-
-  @@unique([networkId, url])
-}
-
-model FiatCurrency {
-  code   String     @id // e.g., "USD"
-  name   String
-  symbol String
-  rates  FiatRate[]
-}
-
-model FiatRate {
-  id        BigInt       @id @default(autoincrement())
-  assetId   String
-  fiatCode  String
-  price     Decimal
-  timestamp DateTime
-  asset     Asset        @relation(fields: [assetId], references: [id])
-  fiat      FiatCurrency @relation(fields: [fiatCode], references: [code])
-
-  @@unique([assetId, fiatCode, timestamp])
-  @@index([assetId, fiatCode, timestamp])
-}
-
-model OrderBookSnapshot {
-  id       BigInt   @id @default(autoincrement())
-  marketId Int
-  bids     Json // [ [price, qty], ... ]
-  asks     Json
-  takenAt  DateTime
-  market   Market   @relation(fields: [marketId], references: [id])
-
-  @@index([marketId, takenAt])
-}
-
-model Order {
-  id        String      @id
-  userId    Int
-  marketId  Int
-  side      String // "buy" | "sell"
-  type      String // "limit" | "market"
-  price     Decimal?
-  amount    Decimal
-  status    String // "open" | "filled" | "canceled"
-  createdAt DateTime    @default(now())
-  user      User        @relation(fields: [userId], references: [id])
-  market    Market      @relation(fields: [marketId], references: [id])
-  OrderFill OrderFill[]
-
-  @@index([userId])
-  @@index([marketId])
-}
-
-model OrderFill {
-  id      BigInt   @id @default(autoincrement())
-  orderId String
-  tradeId BigInt
-  qty     Decimal
-  fee     Decimal?
-  trade   Trade    @relation(fields: [tradeId], references: [id])
-  order   Order    @relation(fields: [orderId], references: [id])
-
-  @@index([orderId])
-  @@index([tradeId])
+model WalletProvider {
+  id      String   @id @default(cuid())
+  name    String
+  rpcUrl  String
+  wallets Wallet[]
 }
 
 model Deposit {
-  id        String   @id
-  userId    Int
-  walletId  String?
-  assetId   String
-  amount    Decimal
-  txHash    String?
-  status    String // "pending" | "completed" | "failed"
-  user      User     @relation(fields: [userId], references: [id])
-  asset     Asset    @relation(fields: [assetId], references: [id])
-  wallet    Wallet?  @relation(fields: [walletId], references: [id])
+  id        String   @id @default(cuid())
+  walletId  String
+  amount    Float
+  txHash    String   @unique
+  status    TxStatus @default(PENDING)
   createdAt DateTime @default(now())
 
-  @@index([userId])
-  @@index([assetId])
+  wallet Wallet @relation(fields: [walletId], references: [id])
 }
 
 model Withdrawal {
-  id        String   @id
-  userId    Int
-  walletId  String?
-  assetId   String
-  toAddress String
-  amount    Decimal
-  fee       Decimal?
-  status    String // "requested" | "sent" | "failed"
-  user      User     @relation(fields: [userId], references: [id])
-  asset     Asset    @relation(fields: [assetId], references: [id])
-  wallet    Wallet?  @relation(fields: [walletId], references: [id])
+  id        String   @id @default(cuid())
+  walletId  String
+  amount    Float
+  txHash    String   @unique
+  status    TxStatus @default(PENDING)
   createdAt DateTime @default(now())
 
-  @@index([userId])
-  @@index([assetId])
+  wallet Wallet @relation(fields: [walletId], references: [id])
 }
 
-model Portfolio {
-  id     Int             @id @default(autoincrement())
-  userId Int
-  name   String
-  items  PortfolioItem[]
-  user   User            @relation(fields: [userId], references: [id])
-
-  @@unique([userId, name])
-}
-
-model PortfolioItem {
-  id          Int       @id @default(autoincrement())
-  portfolioId Int
-  assetId     String
-  amount      Decimal
-  asset       Asset     @relation(fields: [assetId], references: [id])
-  portfolio   Portfolio @relation(fields: [portfolioId], references: [id])
-
-  @@unique([portfolioId, assetId])
-}
-
-model Watchlist {
-  id      Int              @id @default(autoincrement())
-  userId  Int
-  name    String
-  entries WatchlistEntry[]
-  user    User             @relation(fields: [userId], references: [id])
-
-  @@unique([userId, name])
-}
-
-model WatchlistEntry {
-  id          Int       @id @default(autoincrement())
-  watchlistId Int
-  assetId     String
-  asset       Asset     @relation(fields: [assetId], references: [id])
-  watchlist   Watchlist @relation(fields: [watchlistId], references: [id])
-
-  @@unique([watchlistId, assetId])
-}
-
-model ApiKey {
-  id        String   @id
-  userId    Int
-  label     String?
-  hashedKey String   @unique
-  user      User     @relation(fields: [userId], references: [id])
+model Transaction {
+  id        String   @id @default(cuid())
+  fromId    String?
+  toId      String?
+  amount    Float
+  txHash    String   @unique
+  status    TxStatus @default(PENDING)
   createdAt DateTime @default(now())
 
-  @@index([userId])
+  from Wallet? @relation("TxFrom", fields: [fromId], references: [id])
+  to   Wallet? @relation("TxTo", fields: [toId], references: [id])
 }
 
-model Notification {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  type      String // "price_alert" | "tx_status" | ...
-  payload   Json
-  read      Boolean  @default(false)
-  user      User     @relation(fields: [userId], references: [id])
+model SmartContract {
+  id        String   @id @default(cuid())
+  name      String
+  address   String   @unique
+  abi       Json
+  chain     Chain
   createdAt DateTime @default(now())
-
-  @@index([userId, read])
 }
 
-model PriceAlert {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  assetId   String
-  target    Decimal
-  direction String // "above" | "below"
-  active    Boolean  @default(true)
-  user      User     @relation(fields: [userId], references: [id])
-  asset     Asset    @relation(fields: [assetId], references: [id])
-  createdAt DateTime @default(now())
+model Token {
+  id        String    @id @default(cuid())
+  name      String
+  symbol    String
+  decimals  Int
+  contract  String    @unique
+  chain     Chain
+  createdAt DateTime  @default(now())
+  balances  Balance[]
+}
 
-  @@unique([userId, assetId, target, direction])
+model Balance {
+  id       String @id @default(cuid())
+  walletId String
+  tokenId  String
+  amount   Float  @default(0)
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+  token  Token  @relation(fields: [tokenId], references: [id])
 }

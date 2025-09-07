@@ -3,6 +3,6 @@ import WalletController from "../controllers/wallet.controller.js";
 
 const router = Router();
 
-router.post("/create", WalletController.createWallet);
+router.get("/", WalletController.createWallet);
 
 export default router;

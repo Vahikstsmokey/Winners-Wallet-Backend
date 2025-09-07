@@ -15,10 +15,10 @@ class WalletController {
 
             res.status(201).json({
                 wallet: {
-                address: wallet.address,
-                privateKey: wallet.privateKey,
-                mnemonic: wallet.mnemonic.phrase
-            }
+                  address: wallet.address,
+                  privateKey: wallet.privateKey,
+                  mnemonic: wallet.mnemonic.phrase
+                }
             })
 
         } catch (e) {

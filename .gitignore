@@ -9,6 +9,8 @@ node_modules
 # Hardhat files
 /cache
 /artifacts
+# Prisma
+prisma/migrations
 
 # TypeChain files
 /typechain
