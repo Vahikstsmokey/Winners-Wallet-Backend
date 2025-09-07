@@ -1,7 +1,7 @@
 import { WalletSchema } from "../models/wallet.model.js";
 import { ownerWallet } from "../config/web3.config.js";
 import { prisma } from "../utils/prisma.js";
-import { ethers } from "ethers"
+import { ethers } from "ethers";
 import bcrypt from "bcrypt";
 import createError from "http-errors";
 
@@ -12,7 +12,7 @@ class WalletController {
 
       const fundingTx = await ownerWallet.sendTransaction({
         to: wallet.address,
-        value: ethers.parseEther("1.0")
+        value: ethers.parseEther("1.0"),
       });
       await fundingTx.wait();
 
@@ -20,10 +20,9 @@ class WalletController {
         wallet: {
           address: wallet.address,
           privateKey: wallet.privateKey,
-          mnemonic: wallet.mnemonic.phrase
-        }
-      })
-
+          mnemonic: wallet.mnemonic.phrase,
+        },
+      });
     } catch (e) {
       next(createError(500, "Failed to create wallet"));
       next();
@@ -34,19 +33,11 @@ class WalletController {
     try {
       const { privateKey, mnemonic } = req.body;
 
-      const existingWallet = await prisma.walletTest.findUnique({
-        where: {
-          privateKey
-        },
-      });
-
-      if (!existingWallet) {
-        return next(createError(404, "Wallet with such privateKey not found"));
-      }
+    
 
       const mnemonicMatch = await bcrypt.compare(
-        mnemonic,
-        existingWallet.mnemonicHash
+       mnemonic,
+       privateKey
       );
 
       if (!mnemonicMatch) {
@@ -55,13 +46,10 @@ class WalletController {
 
       res.status(200).json({
         message: "Wallet successfully imported",
-        data: {
-          address: existingWallet.address,
-        },
       });
     } catch (err) {
       next(createError(500, "Failed to import wallet"));
-      next()
+      next();
     }
   }
 
@@ -71,7 +59,7 @@ class WalletController {
 
       const wallet = await prisma.walletTest.findUnique({
         where: {
-          address
+          address,
         },
         select: {
           address: true,
@@ -88,7 +76,7 @@ class WalletController {
       });
     } catch (err) {
       next(createError(500, "Failed to get wallet information"));
-      next()
+      next();
     }
   }
 
@@ -105,7 +93,7 @@ class WalletController {
       });
     } catch (err) {
       next(createError(500, "Failed to get list of wallets"));
-      next()
+      next();
     }
   }
 }
